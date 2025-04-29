@@ -1,0 +1,400 @@
+# TinyML Wildlife Monitoring System 
+# No external dependencies required
+# This script demonstrates the key components of the TinyML solution
+# Author: Shuronjit Sumon Biswas
+# Date: April 2025
+
+import os
+import time
+import random
+import datetime
+
+# -----------------------------------------------------------------
+# Configuration Parameters
+# -----------------------------------------------------------------
+
+# Target species for classification
+TARGET_SPECIES = [
+    "Bubo bubo (Eagle Owl)",
+    "Luscinia megarhynchos (Nightingale)",
+    "Canis lupus (Gray Wolf)",
+    "Vulpes vulpes (Red Fox)",
+    "Tursiops truncatus (Dolphin)",
+    "Megaptera novaeangliae (Humpback Whale)",
+    "Background Noise"
+]
+
+# MFCC Feature extraction parameters
+MFCC_CONFIG = {
+    "implementation_version": 3,
+    "frame_length": 0.02,        # 20ms frame length
+    "frame_stride": 0.01,        # 10ms frame stride (50% overlap)
+    "num_filters": 40,           # Number of mel filters
+    "fft_length": 256,           # FFT length
+    "win_size": 320,             # Window size
+    "low_frequency": 20,         # Low frequency cutoff (Hz)
+    "high_frequency": 8000,      # High frequency cutoff (Hz)
+    "num_coefficients": 13       # Number of MFCC coefficients
+}
+
+# Training parameters
+TRAINING_CONFIG = {
+    "learning_rate": 0.0005,
+    "epochs": 30,
+    "batch_size": 32,
+    "validation_split": 0.2,
+    "optimizer": "adam",
+    "loss": "categorical_crossentropy"
+}
+
+# Model architecture parameters
+MODEL_LAYERS = [
+    {"name": "Input Layer", "shape": "(time_steps, 13)", "params": 0},
+    {"name": "Conv1D", "filters": 16, "kernel_size": 5, "activation": "relu", "params": 1056},
+    {"name": "MaxPooling1D", "pool_size": 2, "params": 0},
+    {"name": "BatchNormalization", "params": 64},
+    {"name": "Conv1D", "filters": 32, "kernel_size": 3, "activation": "relu", "params": 1568},
+    {"name": "MaxPooling1D", "pool_size": 2, "params": 0},
+    {"name": "BatchNormalization", "params": 128},
+    {"name": "Flatten", "params": 0},
+    {"name": "Dense", "units": 64, "activation": "relu", "params": 49216},
+    {"name": "Dropout", "rate": 0.25, "params": 0},
+    {"name": "Dense (Output)", "units": 7, "activation": "softmax", "params": 455}
+]
+
+# -----------------------------------------------------------------
+# Utility Functions
+# -----------------------------------------------------------------
+
+def clear_screen():
+    """Clear the console screen based on OS"""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def display_header(title):
+    """Display a formatted header"""
+    print("\n" + "=" * 80)
+    print(f"{title}")
+    print("=" * 80)
+
+def display_footer():
+    """Display a formatted footer"""
+    print("=" * 80)
+    print("TinyML Wildlife Monitoring System - Edge Impulse Implementation")
+    print("=" * 80)
+
+def simulate_audio_capture(duration_ms=1000, sample_rate=16000):
+    """Simulate capturing audio data"""
+    print(f"[AUDIO] Capturing {duration_ms}ms of audio at {sample_rate}Hz...")
+    samples = duration_ms * sample_rate // 1000
+    
+    # This would normally capture actual audio; we're just simulating
+    audio_data = [random.uniform(-0.5, 0.5) for _ in range(samples)]
+    
+    # Simulate some delay
+    time.sleep(0.2)
+    
+    print(f"[AUDIO] Captured {len(audio_data)} samples")
+    return audio_data
+
+def simulate_mfcc_extraction(audio_data):
+    """Simulate MFCC feature extraction from audio data"""
+    print("[PROC] Extracting MFCC features...")
+    
+    # In reality, this would process the audio data; we're just simulating
+    num_frames = len(audio_data) // (MFCC_CONFIG["frame_length"] * 16000)
+    mfcc_features = []
+    
+    for i in range(int(num_frames)):
+        # Simulate 13 MFCC coefficients
+        frame_features = [random.uniform(-10, 10) for _ in range(MFCC_CONFIG["num_coefficients"])]
+        mfcc_features.append(frame_features)
+    
+    # Simulate some processing delay
+    time.sleep(0.1)
+    
+    print(f"[PROC] Extracted {len(mfcc_features)} frames with {MFCC_CONFIG['num_coefficients']} coefficients each")
+    return mfcc_features
+
+def simulate_inference(mfcc_features, scenario_index=0):
+    """Simulate model inference on MFCC features"""
+    print("[ML] Running inference through TinyML model...")
+    
+    # Demo scenarios to show different detection cases
+    demo_scenarios = [
+        # Eagle Owl detection
+        {
+            "Bubo bubo (Eagle Owl)": 0.92,
+            "Luscinia megarhynchos (Nightingale)": 0.03,
+            "Canis lupus (Gray Wolf)": 0.01,
+            "Vulpes vulpes (Red Fox)": 0.00,
+            "Tursiops truncatus (Dolphin)": 0.00,
+            "Megaptera novaeangliae (Humpback Whale)": 0.00,
+            "Background Noise": 0.04
+        },
+        # Wolf and Fox confusion case
+        {
+            "Bubo bubo (Eagle Owl)": 0.00,
+            "Luscinia megarhynchos (Nightingale)": 0.00,
+            "Canis lupus (Gray Wolf)": 0.58,
+            "Vulpes vulpes (Red Fox)": 0.38,
+            "Tursiops truncatus (Dolphin)": 0.00,
+            "Megaptera novaeangliae (Humpback Whale)": 0.00,
+            "Background Noise": 0.04
+        },
+        # Marine mammal detection
+        {
+            "Bubo bubo (Eagle Owl)": 0.00,
+            "Luscinia megarhynchos (Nightingale)": 0.00,
+            "Canis lupus (Gray Wolf)": 0.00,
+            "Vulpes vulpes (Red Fox)": 0.00,
+            "Tursiops truncatus (Dolphin)": 0.97,
+            "Megaptera novaeangliae (Humpback Whale)": 0.03,
+            "Background Noise": 0.00
+        },
+        # Background noise case
+        {
+            "Bubo bubo (Eagle Owl)": 0.02,
+            "Luscinia megarhynchos (Nightingale)": 0.01,
+            "Canis lupus (Gray Wolf)": 0.00,
+            "Vulpes vulpes (Red Fox)": 0.00,
+            "Tursiops truncatus (Dolphin)": 0.00,
+            "Megaptera novaeangliae (Humpback Whale)": 0.00,
+            "Background Noise": 0.97
+        }
+    ]
+    
+    # Select scenario based on index (rotating through them)
+    result = demo_scenarios[scenario_index % len(demo_scenarios)]
+    
+    # Simulate inference time
+    inference_time = random.uniform(130, 150)
+    time.sleep(0.15)  # Simulate actual processing time
+    
+    print(f"[ML] Inference complete in {inference_time:.1f}ms")
+    return result, inference_time
+
+def save_detection(species, confidence, inference_time):
+    """Simulate saving detection to local storage"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    detection = {
+        "timestamp": timestamp,
+        "species": species,
+        "confidence": confidence,
+        "inference_time_ms": inference_time
+    }
+    
+    # In a real system, this would write to a file
+    print(f"[STORAGE] Saved detection: {detection}")
+    return detection
+
+def display_detection_results(results, inference_time):
+    """Display the detection results in a formatted table"""
+    detected_species = max(results.items(), key=lambda x: x[1])
+    confidence = detected_species[1] * 100
+    
+    # Display results table
+    print("\n" + "-" * 60)
+    print(f"{'Species':<40} {'Confidence':<10}")
+    print("-" * 60)
+    
+    for species, prob in sorted(results.items(), key=lambda x: x[1], reverse=True):
+        # Highlight the most likely species
+        if species == detected_species[0]:
+            print(f"{species:<40} {prob*100:>8.2f}% ←")
+        else:
+            print(f"{species:<40} {prob*100:>8.2f}%")
+    
+    print("-" * 60)
+    
+    # Display assessment
+    if confidence > 70:
+        assessment = "HIGH CONFIDENCE DETECTION"
+    elif confidence > 50:
+        assessment = "MODERATE CONFIDENCE DETECTION"
+    else:
+        assessment = "LOW CONFIDENCE - NO DETECTION LOGGED"
+    
+    print(f"\n[RESULT] {assessment}")
+    print(f"[RESULT] Species: {detected_species[0]}")
+    print(f"[RESULT] Confidence: {confidence:.2f}%")
+    print(f"[RESULT] Inference Time: {inference_time:.1f}ms")
+    
+    # If confidence is sufficient, save the detection
+    if confidence > 50:
+        save_detection(detected_species[0], detected_species[1], inference_time)
+
+def display_model_summary():
+    """Display a summary of the model architecture"""
+    display_header("Model Architecture")
+    
+    # Print model layers
+    print(f"{'Layer':<20} {'Output Shape':<20} {'Parameters':<10}")
+    print("-" * 50)
+
+    # Input shape calculation based on 1 second of audio at 16kHz with 50% overlap
+    time_steps = 98
+    for layer in MODEL_LAYERS:
+        if layer["name"] == "Input Layer":
+            shape = f"(None, {time_steps}, 13)"
+        elif layer["name"] == "Conv1D" and layer.get("filters") == 16:
+            shape = f"(None, {time_steps}, 16)"
+        elif layer["name"] == "MaxPooling1D" and time_steps > 1:
+            time_steps = time_steps // 2
+            shape = f"(None, {time_steps}, 16)" if layer == MODEL_LAYERS[2] else f"(None, {time_steps}, 32)"
+        elif layer["name"] == "BatchNormalization":
+            shape = f"(None, {time_steps}, 16)" if layer == MODEL_LAYERS[3] else f"(None, {time_steps}, 32)"
+        elif layer["name"] == "Conv1D" and layer.get("filters") == 32:
+            shape = f"(None, {time_steps}, 32)"
+        elif layer["name"] == "Flatten":
+            shape = f"(None, {time_steps * 32})"
+        elif layer["name"] == "Dense" and layer.get("units") == 64:
+            shape = "(None, 64)"
+        elif layer["name"] == "Dropout":
+            shape = "(None, 64)"
+        elif layer["name"] == "Dense (Output)":
+            shape = "(None, 7)"
+        else:
+            shape = "Unknown"
+        
+        print(f"{layer['name']:<20} {shape:<20} {layer['params']:<10}")
+
+    total_params = sum(layer["params"] for layer in MODEL_LAYERS)
+    print("-" * 50)
+    print(f"Total Params: {total_params:,}")
+    print(f"Model Size (8-bit quantized): 92KB")
+    print(f"Memory Usage During Inference: ~4.2MB")
+
+def display_blerp_advantages():
+    """Display the BLERP advantages of the TinyML approach"""
+    display_header("BLERP Advantages")
+    
+    advantages = {
+        "Bandwidth": "99% reduction in data transmission by processing audio locally",
+        "Latency": "Real-time processing without cloud dependency (<150ms inference)",
+        "Economics": "$40 per unit vs. $500-1000 for commercial systems",
+        "Reliability": "Continued operation during connectivity outages",
+        "Privacy": "Protects sensitive species location data from potential poachers"
+    }
+    
+    for category, description in advantages.items():
+        print(f"{category:<12}: {description}")
+
+def display_menu():
+    """Display the main menu"""
+    clear_screen()
+    display_header("TinyML Wildlife Monitoring System Demo")
+    
+    print("1. Run Detection Simulation")
+    print("2. View Model Architecture")
+    print("3. View MFCC Configuration")
+    print("4. View BLERP Advantages")
+    print("5. Show Deployment Specifications")
+    print("6. Exit Demo")
+    
+    choice = input("\nSelect option (1-6): ")
+    return choice
+
+def display_mfcc_config():
+    """Display MFCC configuration details"""
+    display_header("MFCC Feature Extraction Configuration")
+    
+    for key, value in MFCC_CONFIG.items():
+        print(f"{key:<20}: {value}")
+    
+    print("\nMemory Efficiency:")
+    raw_audio_size = 16000 * 2  # 1 second of 16-bit audio @ 16kHz
+    mfcc_size = 13 * 98 * 4  # 13 coefficients * ~98 frames * 4 bytes (float32)
+    reduction = (1 - mfcc_size / raw_audio_size) * 100
+    
+    print(f"Raw Audio Size: {raw_audio_size} bytes")
+    print(f"MFCC Features Size: {mfcc_size} bytes")
+    print(f"Data Reduction: {reduction:.1f}%")
+
+def display_deployment_specs():
+    """Display deployment specifications"""
+    display_header("Deployment Specifications")
+    
+    specs = {
+        "Target Device": "Raspberry Pi Zero 2 W",
+        "Processor": "ARM Cortex-A53 (64-bit) @ 1.0GHz",
+        "Memory": "512 MB LPDDR2 SDRAM",
+        "Storage": "8GB+ microSD card",
+        "Input": "USB or I2S MEMS microphone",
+        "Power Source": "Battery pack and/or solar panel",
+        "Battery Life": "2-4 weeks (battery only), 3-6 months (with solar)",
+        "Cost": "~$40 per unit",
+        "Enclosure": "Weatherproof IP65-rated case",
+        "Operating Temperature": "-10°C to +50°C",
+        "Wireless": "Optional LoRa for long-range data transmission"
+    }
+    
+    for key, value in specs.items():
+        print(f"{key:<20}: {value}")
+
+def run_full_pipeline(scenario_index=0):
+    """Run the complete audio processing pipeline simulation"""
+    display_header("Wildlife Monitoring Pipeline Simulation")
+    
+    print("\n[SYSTEM] Starting audio capture and processing pipeline...")
+    
+    # Step 1: Capture Audio
+    audio_data = simulate_audio_capture()
+    
+    # Step 2: Extract MFCC Features
+    mfcc_features = simulate_mfcc_extraction(audio_data)
+    
+    # Step 3: Run Inference
+    results, inference_time = simulate_inference(mfcc_features, scenario_index)
+    
+    # Step 4: Display Results
+    display_detection_results(results, inference_time)
+    
+    return scenario_index + 1
+
+# -----------------------------------------------------------------
+# Main Demo Loop
+# -----------------------------------------------------------------
+
+def main():
+    scenario_index = 0
+    
+    while True:
+        choice = display_menu()
+        
+        if choice == '1':
+            clear_screen()
+            scenario_index = run_full_pipeline(scenario_index)
+            input("\nPress Enter to continue...")
+            
+        elif choice == '2':
+            clear_screen()
+            display_model_summary()
+            input("\nPress Enter to continue...")
+            
+        elif choice == '3':
+            clear_screen()
+            display_mfcc_config()
+            input("\nPress Enter to continue...")
+            
+        elif choice == '4':
+            clear_screen()
+            display_blerp_advantages()
+            input("\nPress Enter to continue...")
+            
+        elif choice == '5':
+            clear_screen()
+            display_deployment_specs()
+            input("\nPress Enter to continue...")
+            
+        elif choice == '6':
+            clear_screen()
+            print("Thank you for exploring the TinyML Wildlife Monitoring System!")
+            break
+            
+        else:
+            print("Invalid choice. Please try again.")
+            time.sleep(1)
+
+if __name__ == "__main__":
+    main()
